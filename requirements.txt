@@ -1,0 +1,5 @@
+telethon
+psutil
+edge-tts
+cryptg
+python-telegram-bot
