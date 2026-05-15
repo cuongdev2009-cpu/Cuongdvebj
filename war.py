@@ -45,8 +45,8 @@ if os.path.exists(CLONE_SESSIONS_FILE):
 else: CLONE_SESSIONS = []
 
 WAR_FILE = "war.txt"
-LAG_FILE = "lag.txt"
-DELAY_SPAM = 0.5
+LAG_FILE = "nhay.txt"
+DELAY_SPAM = 0.005
 
 # ========== BIẾN TOÀN CỤC ==========
 war_phrases = []
