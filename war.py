@@ -443,19 +443,27 @@ async def lclone_cmd(event):
 async def locclone_cmd(event):
     if not is_admin(event.sender_id): return
     await delete_cmd_msg(event)
+    
+    # KHAI BÁO GLOBAL NGAY TẠI ĐÂY
+    global clone_clients, CLONE_SESSIONS 
+
     await temp_reply(event, "🔄 Đang lọc clone chết...")
     alive, alive_sess = [], []
-    for i, clone in enumerate(clone_clients):
+    
+    for i, clone in enumerate(clone_clients): # Bây giờ dùng thoải mái không bị lỗi
         try:
             await clone.get_me()
             alive.append(clone)
             alive_sess.append(CLONE_SESSIONS[i])
-        except: pass
-    global clone_clients
+        except: 
+            pass
+            
     clone_clients = alive
-    CLONE_SESSIONS.clear(); CLONE_SESSIONS.extend(alive_sess)
+    CLONE_SESSIONS.clear()
+    CLONE_SESSIONS.extend(alive_sess)
     save_clone_sessions()
     await temp_reply(event, f"✅ Còn {len(clone_clients)} clone sống")
+
 
 # ========== TIỆN ÍCH KHÁC ==========
 @events.register(events.NewMessage(pattern=r'^/voice\s+(.+)$'))
