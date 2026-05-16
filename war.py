@@ -791,7 +791,7 @@ async def main():
                       cam_cmd, cut_cmd, uncam_cmd, uncut_cmd, join_cmd,
                       addbot_cmd, lbot_cmd, voice_cmd, cpuram_cmd, noi_cmd, tao_cmd,
                       addadmin_cmd, boadmin_cmd, addclone_cmd, lclone_cmd, locclone_cmd,
-                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, help_cmd,tao2]:
+                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, help_cmd,tao2_cmd]:
                 bot.add_event_handler(h)
         except Exception as e: print(f"❌ BOT LỖI: {e}")
 
@@ -807,7 +807,7 @@ async def main():
                       cam_cmd, cut_cmd, uncam_cmd, uncut_cmd, join_cmd,
                       addbot_cmd, lbot_cmd, voice_cmd, cpuram_cmd, noi_cmd, tao_cmd,
                       addadmin_cmd, boadmin_cmd, addclone_cmd, lclone_cmd, locclone_cmd,
-                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, auto_delete_handler, help_cmd,tao2]:
+                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, auto_delete_handler, help_cmd,tao2_cmd]:
                 clone.add_event_handler(h)
         except Exception as e: print(f"❌ CLONE LỖI: {e}")
 
