@@ -574,33 +574,35 @@ async def tao2_cmd(event):
     
     clone = clone_clients[0]
     try:
-        # Bước 1: Tìm kiếm User qua Username để lấy Entity và access_hash
+        # Bước 1: Tìm kiếm User qua Username
         user_entity = await resolve_user_by_username(clone, username)
-        
         if not user_entity:
             await temp_reply(event, f"❌ Không tìm thấy người dùng {username}")
             return
 
         title = f"Group_War_{random.randint(1000,9999)}"
         
-        # Bước 2: Tạo nhóm với User đã tìm thấy
+        # Bước 2: Tạo nhóm
         result = await clone(CreateChatRequest(title=title, users=[user_entity]))
         
-        # Lấy chat_id từ kết quả trả về
+        # SỬA LỖI 'Updates' object is not iterable TẠI ĐÂY
         chat_id = None
+        
+        # Cách 1: Lấy trực tiếp từ thuộc tính chats của đối tượng Updates
         if hasattr(result, 'chats') and result.chats:
             chat_id = result.chats[0].id
-        elif hasattr(result, 'updates'):
+        # Cách 2: Nếu không có .chats, mới tìm trong danh sách .updates (nếu có)
+        elif hasattr(result, 'updates') and isinstance(result.updates, list):
             for u in result.updates:
                 if hasattr(u, 'chats') and u.chats:
                     chat_id = u.chats[0].id
                     break
         
         if not chat_id:
-            await temp_reply(event, "❌ Tạo nhóm lỗi: Không lấy được ID")
+            await temp_reply(event, "❌ Không lấy được ID nhóm (Lỗi cấu trúc Updates)")
             return
 
-        # Bước 3: Tự động kéo Admin và Bot vào nhóm
+        # Bước 3: Add Admin và Bot
         for admin_id in ADMIN_IDS:
             await smart_add_user(clone, chat_id, admin_id)
             await asyncio.sleep(0.5)
@@ -616,7 +618,6 @@ async def tao2_cmd(event):
         
     except Exception as e: 
         await temp_reply(event, f"❌ Lỗi hệ thống: {str(e)}")
-
 
 @events.register(events.NewMessage(pattern=r'^/join\s+(.+)$'))
 async def join_cmd(event):
