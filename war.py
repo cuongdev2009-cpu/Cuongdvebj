@@ -45,8 +45,8 @@ if os.path.exists(CLONE_SESSIONS_FILE):
 else: CLONE_SESSIONS = []
 
 WAR_FILE = "war.txt"
-LAG_FILE = "nhay.txt"
-DELAY_SPAM = 0.005
+LAG_FILE = "lag.txt"
+DELAY_SPAM = 0.5
 
 # ========== BIẾN TOÀN CỤC ==========
 war_phrases = []
@@ -159,41 +159,45 @@ async def resolve_user_by_username(client, username):
     except: return None
 
 async def smart_add_user(clone, chat_id, user_id, is_bot=False):
-    """Thêm user vào chat, ép clone resolve entity để lấy access_hash xịn."""
+    """Thêm user vào chat, tự động chọn API phù hợp và xử lý bot."""
+    chat = await clone.get_entity(chat_id)
+    is_channel = getattr(chat, 'megagroup', False) or getattr(chat, 'broadcast', False)
+
+    input_user = None
+    if is_bot:
+        # Thử lấy username của bot từ danh sách bot_clients để resolve
+        username = None
+        for b in bot_clients:
+            try:
+                me = await b.get_me()
+                if me.id == user_id:
+                    username = me.username
+                    break
+            except: pass
+        if username:
+            input_user = await resolve_user_by_username(clone, username)
+        if input_user is None:
+            input_user = await get_input_user(clone, user_id)
+    else:
+        input_user = await get_input_user(clone, user_id)
+
+    if input_user is None:
+        return False
+
     try:
-        # 1. Lấy thông tin nhóm (Entity)
-        chat = await clone.get_entity(chat_id)
-        is_channel = getattr(chat, 'megagroup', False) or getattr(chat, 'broadcast', False)
-
-        # 2. ĐIỂM CẦN NHÉT: Ép Clone nhận diện user_id để lấy thông tin thực thể (Entity)
-        # Việc này giúp tránh lỗi 'UserIdInvalid' hoặc 'access_hash=0'
-        try:
-            target_entity = await clone.get_entity(user_id)
-            input_user = InputUser(user_id=target_entity.id, access_hash=target_entity.access_hash)
-        except Exception as e:
-            print(f"Clone không thể resolve user {user_id}: {e}")
-            return False
-
-        # 3. Thực hiện add dựa trên loại nhóm
         if is_channel:
-            # Dùng InviteToChannel cho Supergroup/Channel
-            await clone(InviteToChannelRequest(channel=chat, users=[input_user]))
+            await clone(InviteToChannelRequest(channel=chat_id, users=[input_user]))
         else:
-            # Dùng AddChatUser cho Group nhỏ thông thường
-            await clone(AddChatUserRequest(chat_id=chat.id, user_id=input_user, fwd_limit=0))
-        
+            await clone(AddChatUserRequest(chat_id=chat_id, user_id=input_user, fwd_limit=0))
         return True
-
     except UserAlreadyParticipantError:
         return True
     except FloodWaitError as fw:
-        print(f"🛑 Clone bị FloodWait khi add: {fw.seconds}s")
         await asyncio.sleep(fw.seconds)
         return False
     except Exception as e:
-        print(f"❌ Lỗi thêm user {user_id}: {e}")
+        print(f"Lỗi thêm user {user_id}: {e}")
         return False
-
 
 # ========== SPAM LOOP (dùng asyncio.Event) ==========
 async def spam_loop(c, chat_id, msg_func, stop_key):
@@ -443,27 +447,19 @@ async def lclone_cmd(event):
 async def locclone_cmd(event):
     if not is_admin(event.sender_id): return
     await delete_cmd_msg(event)
-    
-    # KHAI BÁO GLOBAL NGAY TẠI ĐÂY
-    global clone_clients, CLONE_SESSIONS 
-
     await temp_reply(event, "🔄 Đang lọc clone chết...")
     alive, alive_sess = [], []
-    
-    for i, clone in enumerate(clone_clients): # Bây giờ dùng thoải mái không bị lỗi
+    for i, clone in enumerate(clone_clients):
         try:
             await clone.get_me()
             alive.append(clone)
             alive_sess.append(CLONE_SESSIONS[i])
-        except: 
-            pass
-            
+        except: pass
+    global clone_clients
     clone_clients = alive
-    CLONE_SESSIONS.clear()
-    CLONE_SESSIONS.extend(alive_sess)
+    CLONE_SESSIONS.clear(); CLONE_SESSIONS.extend(alive_sess)
     save_clone_sessions()
     await temp_reply(event, f"✅ Còn {len(clone_clients)} clone sống")
-
 
 # ========== TIỆN ÍCH KHÁC ==========
 @events.register(events.NewMessage(pattern=r'^/voice\s+(.+)$'))
@@ -662,7 +658,8 @@ async def help_cmd(event):
     if not is_admin(event.sender_id): return
     await delete_cmd_msg(event)
     text = (
-        "**🤖  - MENU LỆNH**\n\n"
+        "**🤖 CUONGDEVGPT - MENU LỆNH**\n\n"
+        "**🔥 SPAM BOT (QĐ)**\n"
         "`/qd1` - Spam war\n`/qd2 @user` - Tag 1\n`/qd3 @a @b` - Tag nhiều\n"
         "`/qd4 text số_lần` - Spam lặp\n`/qd5 ID` - Tag by ID\n`/qd6` - Lag\n\n"
         "**💀 SPAM CLONE (SP)**\n"
