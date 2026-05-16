@@ -585,21 +585,44 @@ async def tao2_cmd(event):
         # Bước 2: Tạo nhóm
         result = await clone(CreateChatRequest(title=title, users=[user_entity]))
         
-        # SỬA LỖI 'Updates' object is not iterable TẠI ĐÂY
+       # --- BẮT ĐẦU ĐOẠN QUÉT ID SIÊU CẤP ---
         chat_id = None
         
-        # Cách 1: Lấy trực tiếp từ thuộc tính chats của đối tượng Updates
+        # 1. Thử lấy từ thuộc tính chats (Phổ biến nhất)
         if hasattr(result, 'chats') and result.chats:
             chat_id = result.chats[0].id
-        # Cách 2: Nếu không có .chats, mới tìm trong danh sách .updates (nếu có)
-        elif hasattr(result, 'updates') and isinstance(result.updates, list):
+        
+        # 2. Nếu không thấy, quét trong danh sách updates
+        if not chat_id and hasattr(result, 'updates'):
             for u in result.updates:
+                # Tìm trong thuộc tính chats của từng update
                 if hasattr(u, 'chats') and u.chats:
                     chat_id = u.chats[0].id
                     break
-        
+                # Tìm trong thuộc tính channel_id hoặc chat_id của update
+                if hasattr(u, 'channel_id'):
+                    chat_id = u.channel_id
+                    break
+                if hasattr(u, 'chat_id'):
+                    chat_id = u.chat_id
+                    break
+
+        # 3. Nếu vẫn không thấy, quét toàn bộ object để tìm bất cứ thứ gì giống ID nhóm
         if not chat_id:
-            await temp_reply(event, "❌ Không lấy được ID nhóm (Lỗi cấu trúc Updates)")
+            try:
+                # Tìm trong danh sách users (đôi khi Telegram trả về thông tin user kèm chat)
+                if hasattr(result, 'users') and result.users:
+                    # Đây là cách cuối cùng: Lấy danh sách tin nhắn mới nhất của Clone để tìm ID nhóm vừa tạo
+                    dialogs = await clone.get_dialogs(limit=5)
+                    for d in dialogs:
+                        if d.name == title: # Khớp tên group vừa đặt
+                            chat_id = d.id
+                            break
+            except: pass
+        # --- KẾT THÚC ĐOẠN QUÉT ---
+
+        if not chat_id:
+            await temp_reply(event, "❌ Đã thử mọi cách nhưng không lấy được ID nhóm. Hãy kiểm tra lại quyền của Clone.")
             return
 
         # Bước 3: Add Admin và Bot
