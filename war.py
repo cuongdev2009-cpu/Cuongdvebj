@@ -504,22 +504,51 @@ async def noi_cmd(event):
 async def tao_cmd(event):
     if not is_admin(event.sender_id): return
     await delete_cmd_msg(event)
+    
     user_id = int(event.pattern_match.group(1))
-    if not clone_clients: await temp_reply(event, "❌ Cần clone"); return
+    if not clone_clients: 
+        await temp_reply(event, "❌ Cần ít nhất 1 clone để tạo nhóm")
+        return
+    
     clone = clone_clients[0]
     try:
         title = f"Group_{random.randint(1000,9999)}"
+        # Thực hiện tạo chat
         result = await clone(CreateChatRequest(title=title, users=[user_id]))
-        chat_id = result.chats[0].id
-        for admin in ADMIN_IDS:
-            await smart_add_user(clone, chat_id, admin)
+        
+        # CÁCH LẤY CHAT_ID AN TOÀN:
+        # Thử lấy từ thuộc tính .chats, nếu không có thì tìm trong .updates
+        chat_id = None
+        if hasattr(result, 'chats') and result.chats:
+            chat_id = result.chats[0].id
+        elif hasattr(result, 'updates'):
+            for u in result.updates:
+                if hasattr(u, 'chats') and u.chats:
+                    chat_id = u.chats[0].id
+                    break
+        
+        if not chat_id:
+            await temp_reply(event, "❌ Không thể lấy được ID nhóm vừa tạo")
+            return
+
+        # Add Admin
+        for admin_id in ADMIN_IDS:
+            await smart_add_user(clone, chat_id, admin_id)
             await asyncio.sleep(0.5)
+            
+        # Add các Bot khác
         for bot in bot_clients:
-            me = await bot.get_me()
-            await smart_add_user(clone, chat_id, me.id, is_bot=True)
-            await asyncio.sleep(1)
-        await temp_reply(event, f"✅ Đã tạo group {title} – ID: {chat_id}")
-    except Exception as e: await temp_reply(event, f"❌ {e}")
+            try:
+                bot_me = await bot.get_me()
+                await smart_add_user(clone, chat_id, bot_me.id, is_bot=True)
+                await asyncio.sleep(1)
+            except:
+                continue
+                
+        await temp_reply(event, f"✅ Đã tạo group **{title}**\n🆔 ID: `{chat_id}`")
+        
+    except Exception as e: 
+        await temp_reply(event, f"❌ Lỗi hệ thống: {str(e)}")
 
 @events.register(events.NewMessage(pattern=r'^/join\s+(.+)$'))
 async def join_cmd(event):
