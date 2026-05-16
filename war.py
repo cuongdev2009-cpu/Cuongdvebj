@@ -517,36 +517,32 @@ async def tao_cmd(event):
     
     clone = clone_clients[0]
     try:
-        # BƯỚC 1: "MỒI" DỮ LIỆU - Gửi tin nhắn để lấy Entity
+        # BƯỚC 1: "MỒI" DỮ LIỆU ĐỂ LẤY ENTITY
         try:
-            # Gửi một tin nhắn ẩn danh/nhẹ nhàng để lấy access_hash
             await clone.send_message(user_id, ".") 
-            # Đợi 1 chút để Telegram cập nhật cache
-            await asyncio.sleep(1) 
-        except Exception as e:
-            print(f"⚠️ Không thể gửi tin nhắn mồi: {e}")
-            # Vẫn thử tiếp tục vì có thể User đã có trong cache từ trước
+            await asyncio.sleep(1.5) # Chờ cache cập nhật
+        except:
+            pass # Bỏ qua nếu bị chặn nhắn tin, cứ thử add bừa
 
-        title = f"Group_{random.randint(1000,9999)}"
+        # Đặt tên cực kỳ duy nhất để tránh nhầm ID
+        title = f"War_{random.randint(10000, 99999)}_{user_id}"
         
         # BƯỚC 2: TẠO NHÓM
-        result = await clone(CreateChatRequest(title=title, users=[user_id]))
+        await clone(CreateChatRequest(title=title, users=[user_id]))
+        await asyncio.sleep(2) # Bắt buộc đợi Telegram tạo xong hệ thống chat
         
-        # Lấy chat_id an toàn
+        # BƯỚC 3: QUÉT ID SIÊU CẤP 100% (Bỏ qua result.updates)
         chat_id = None
-        if hasattr(result, 'chats') and result.chats:
-            chat_id = result.chats[0].id
-        elif hasattr(result, 'updates'):
-            for u in result.updates:
-                if hasattr(u, 'chats') and u.chats:
-                    chat_id = u.chats[0].id
-                    break
+        async for dialog in clone.iter_dialogs(limit=15):
+            if dialog.name == title:
+                chat_id = dialog.id
+                break
         
         if not chat_id:
-            await temp_reply(event, "❌ Tạo nhóm thành công nhưng không lấy được ID")
+            await temp_reply(event, "❌ Tạo thành công nhưng User đã thoát ngay lập tức hoặc lỗi đồng bộ ID.")
             return
 
-        # BƯỚC 3: ADD ADMIN & BOT
+        # BƯỚC 4: KÉO DÀN ADMIN & BOT VÀO
         for admin_id in ADMIN_IDS:
             await smart_add_user(clone, chat_id, admin_id)
             await asyncio.sleep(0.5)
@@ -558,10 +554,11 @@ async def tao_cmd(event):
                 await asyncio.sleep(0.8)
             except: continue
                 
-        await temp_reply(event, f"✅ Đã mồi tin nhắn và tạo group thành công!\n🆔 ID: `{chat_id}`")
+        await temp_reply(event, f"✅ Đã mồi tin nhắn và tạo group cho ID {user_id}!\n🆔 ID Group: `{chat_id}`")
         
     except Exception as e: 
         await temp_reply(event, f"❌ Lỗi: {str(e)}")
+        
 @events.register(events.NewMessage(pattern=r'^/tao2\s+(@\w+)$'))
 async def tao2_cmd(event):
     if not is_admin(event.sender_id): return
@@ -574,58 +571,31 @@ async def tao2_cmd(event):
     
     clone = clone_clients[0]
     try:
-        # Bước 1: Tìm kiếm User qua Username
+        # BƯỚC 1: TÌM KIẾM USERNAME
         user_entity = await resolve_user_by_username(clone, username)
         if not user_entity:
-            await temp_reply(event, f"❌ Không tìm thấy người dùng {username}")
+            await temp_reply(event, f"❌ Không tìm thấy hoặc sai Username {username}")
             return
 
-        title = f"Group_War_{random.randint(1000,9999)}"
+        # Đặt tên duy nhất
+        title = f"War_{random.randint(10000, 99999)}_{username.replace('@','')}"
         
-        # Bước 2: Tạo nhóm
-        result = await clone(CreateChatRequest(title=title, users=[user_entity]))
+        # BƯỚC 2: TẠO NHÓM
+        await clone(CreateChatRequest(title=title, users=[user_entity]))
+        await asyncio.sleep(2)
         
-       # --- BẮT ĐẦU ĐOẠN QUÉT ID SIÊU CẤP ---
+        # BƯỚC 3: QUÉT ID SIÊU CẤP 100%
         chat_id = None
+        async for dialog in clone.iter_dialogs(limit=15):
+            if dialog.name == title:
+                chat_id = dialog.id
+                break
         
-        # 1. Thử lấy từ thuộc tính chats (Phổ biến nhất)
-        if hasattr(result, 'chats') and result.chats:
-            chat_id = result.chats[0].id
-        
-        # 2. Nếu không thấy, quét trong danh sách updates
-        if not chat_id and hasattr(result, 'updates'):
-            for u in result.updates:
-                # Tìm trong thuộc tính chats của từng update
-                if hasattr(u, 'chats') and u.chats:
-                    chat_id = u.chats[0].id
-                    break
-                # Tìm trong thuộc tính channel_id hoặc chat_id của update
-                if hasattr(u, 'channel_id'):
-                    chat_id = u.channel_id
-                    break
-                if hasattr(u, 'chat_id'):
-                    chat_id = u.chat_id
-                    break
-
-        # 3. Nếu vẫn không thấy, quét toàn bộ object để tìm bất cứ thứ gì giống ID nhóm
         if not chat_id:
-            try:
-                # Tìm trong danh sách users (đôi khi Telegram trả về thông tin user kèm chat)
-                if hasattr(result, 'users') and result.users:
-                    # Đây là cách cuối cùng: Lấy danh sách tin nhắn mới nhất của Clone để tìm ID nhóm vừa tạo
-                    dialogs = await clone.get_dialogs(limit=5)
-                    for d in dialogs:
-                        if d.name == title: # Khớp tên group vừa đặt
-                            chat_id = d.id
-                            break
-            except: pass
-        # --- KẾT THÚC ĐOẠN QUÉT ---
-
-        if not chat_id:
-            await temp_reply(event, "❌ Đã thử mọi cách nhưng không lấy được ID nhóm. Hãy kiểm tra lại quyền của Clone.")
+            await temp_reply(event, "❌ Tạo thành công nhưng không lấy được ID.")
             return
 
-        # Bước 3: Add Admin và Bot
+        # BƯỚC 4: KÉO DÀN ADMIN & BOT VÀO
         for admin_id in ADMIN_IDS:
             await smart_add_user(clone, chat_id, admin_id)
             await asyncio.sleep(0.5)
@@ -637,7 +607,7 @@ async def tao2_cmd(event):
                 await asyncio.sleep(0.8)
             except: continue
                 
-        await temp_reply(event, f"✅ Đã tạo nhóm cho {username} thành công!\n🆔 ID: `{chat_id}`")
+        await temp_reply(event, f"✅ Đã tạo nhóm cho {username} thành công!\n🆔 ID Group: `{chat_id}`")
         
     except Exception as e: 
         await temp_reply(event, f"❌ Lỗi hệ thống: {str(e)}")
