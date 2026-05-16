@@ -45,8 +45,8 @@ if os.path.exists(CLONE_SESSIONS_FILE):
 else: CLONE_SESSIONS = []
 
 WAR_FILE = "war.txt"
-LAG_FILE = "lag.txt"
-DELAY_SPAM = 0.5
+LAG_FILE = "nhay.txt"
+DELAY_SPAM = 0.005
 
 # ========== BIẾN TOÀN CỤC ==========
 war_phrases = []
@@ -456,7 +456,7 @@ async def locclone_cmd(event):
             alive.append(clone)
             alive_sess.append(CLONE_SESSIONS[i])
         except: pass
-    global clone_clients
+    
     clone_clients = alive
     CLONE_SESSIONS.clear(); CLONE_SESSIONS.extend(alive_sess)
     save_clone_sessions()
