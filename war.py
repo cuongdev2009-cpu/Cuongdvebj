@@ -445,6 +445,7 @@ async def lclone_cmd(event):
 
 @events.register(events.NewMessage(pattern=r'^/locclone$'))
 async def locclone_cmd(event):
+    global clone_clients
     if not is_admin(event.sender_id): return
     await delete_cmd_msg(event)
     await temp_reply(event, "🔄 Đang lọc clone chết...")
