@@ -520,83 +520,27 @@ async def noi_cmd(event):
 @events.register(events.NewMessage(pattern=r'^/tao\s+(\d+)$'))
 async def tao_cmd(event):
     if not is_admin(event.sender_id): return
+    # Chỉ cho phép clone đầu tiên thực hiện để tránh tạo nhiều group
+    if not clone_clients or event.client != clone_clients[0]: return 
+    
     await delete_cmd_msg(event)
-    
     user_id = int(event.pattern_match.group(1))
-    if not clone_clients: 
-        await temp_reply(event, "❌ Cần ít nhất 1 clone để thực hiện")
-        return
-    
     clone = clone_clients[0]
+    
     try:
         # BƯỚC 1: "MỒI" DỮ LIỆU ĐỂ LẤY ENTITY
         try:
             await clone.send_message(user_id, ".") 
-            await asyncio.sleep(1.5) # Chờ cache cập nhật
-        except:
-            pass # Bỏ qua nếu bị chặn nhắn tin, cứ thử add bừa
+            await asyncio.sleep(1.5) 
+        except: pass 
 
-        # Đặt tên cực kỳ duy nhất để tránh nhầm ID
         title = f"War_{random.randint(10000, 99999)}_{user_id}"
         
         # BƯỚC 2: TẠO NHÓM
         await clone(CreateChatRequest(title=title, users=[user_id]))
-        await asyncio.sleep(2) # Bắt buộc đợi Telegram tạo xong hệ thống chat
+        await asyncio.sleep(2) 
         
-        # BƯỚC 3: QUÉT ID SIÊU CẤP 100% (Bỏ qua result.updates)
-        chat_id = None
-        async for dialog in clone.iter_dialogs(limit=15):
-            if dialog.name == title:
-                chat_id = dialog.id
-                break
-        
-        if not chat_id:
-            await temp_reply(event, "❌ Tạo thành công nhưng User đã thoát ngay lập tức hoặc lỗi đồng bộ ID.")
-            return
-
-        # BƯỚC 4: KÉO DÀN ADMIN & BOT VÀO
-        for admin_id in ADMIN_IDS:
-            await smart_add_user(clone, chat_id, admin_id)
-            await asyncio.sleep(0.5)
-            
-        for bot in bot_clients:
-            try:
-                bot_me = await bot.get_me()
-                await smart_add_user(clone, chat_id, bot_me.id, is_bot=True)
-                await asyncio.sleep(0.8)
-            except: continue
-                
-        await temp_reply(event, f"✅ Đã mồi tin nhắn và tạo group cho ID {user_id}!\n🆔 ID Group: `{chat_id}`")
-        
-    except Exception as e: 
-        await temp_reply(event, f"❌ Lỗi: {str(e)}")
-        
-@events.register(events.NewMessage(pattern=r'^/tao2\s+(@\w+)$'))
-async def tao2_cmd(event):
-    if not is_admin(event.sender_id): return
-    await delete_cmd_msg(event)
-    
-    username = event.pattern_match.group(1).strip()
-    if not clone_clients: 
-        await temp_reply(event, "❌ Cần ít nhất 1 clone để tạo nhóm")
-        return
-    
-    clone = clone_clients[0]
-    try:
-        # BƯỚC 1: TÌM KIẾM USERNAME
-        user_entity = await resolve_user_by_username(clone, username)
-        if not user_entity:
-            await temp_reply(event, f"❌ Không tìm thấy hoặc sai Username {username}")
-            return
-
-        # Đặt tên duy nhất
-        title = f"War_{random.randint(10000, 99999)}_{username.replace('@','')}"
-        
-        # BƯỚC 2: TẠO NHÓM
-        await clone(CreateChatRequest(title=title, users=[user_entity]))
-        await asyncio.sleep(2)
-        
-        # BƯỚC 3: QUÉT ID SIÊU CẤP 100%
+        # BƯỚC 3: QUÉT ID BẰNG DIALOGS (CHÍNH XÁC 100%)
         chat_id = None
         async for dialog in clone.iter_dialogs(limit=15):
             if dialog.name == title:
@@ -607,7 +551,7 @@ async def tao2_cmd(event):
             await temp_reply(event, "❌ Tạo thành công nhưng không lấy được ID.")
             return
 
-        # BƯỚC 4: KÉO DÀN ADMIN & BOT VÀO
+        # BƯỚC 4: KÉO ADMIN & BOT
         for admin_id in ADMIN_IDS:
             await smart_add_user(clone, chat_id, admin_id)
             await asyncio.sleep(0.5)
@@ -619,10 +563,60 @@ async def tao2_cmd(event):
                 await asyncio.sleep(0.8)
             except: continue
                 
-        await temp_reply(event, f"✅ Đã tạo nhóm cho {username} thành công!\n🆔 ID Group: `{chat_id}`")
+        await temp_reply(event, f"✅ Đã tạo group cho ID {user_id}!\n🆔 ID: `{chat_id}`")
         
     except Exception as e: 
-        await temp_reply(event, f"❌ Lỗi hệ thống: {str(e)}")
+        await temp_reply(event, f"❌ Lỗi: {str(e)}")
+        
+@events.register(events.NewMessage(pattern=r'^/tao2\s+(@\w+)$'))
+async def tao2_cmd(event):
+    if not is_admin(event.sender_id): return
+    if not clone_clients or event.client != clone_clients[0]: return 
+    
+    await delete_cmd_msg(event)
+    username = event.pattern_match.group(1).strip()
+    clone = clone_clients[0]
+    
+    try:
+        # BƯỚC 1: TÌM KIẾM USERNAME
+        user_entity = await resolve_user_by_username(clone, username)
+        if not user_entity:
+            await temp_reply(event, f"❌ Không tìm thấy Username {username}")
+            return
+
+        title = f"War_{random.randint(10000, 99999)}_{username.replace('@','')}"
+        
+        # BƯỚC 2: TẠO NHÓM
+        await clone(CreateChatRequest(title=title, users=[user_entity]))
+        await asyncio.sleep(2)
+        
+        # BƯỚC 3: QUÉT ID
+        chat_id = None
+        async for dialog in clone.iter_dialogs(limit=15):
+            if dialog.name == title:
+                chat_id = dialog.id
+                break
+        
+        if not chat_id:
+            await temp_reply(event, "❌ Tạo thành công nhưng không lấy được ID.")
+            return
+
+        # BƯỚC 4: KÉO ADMIN & BOT
+        for admin_id in ADMIN_IDS:
+            await smart_add_user(clone, chat_id, admin_id)
+            await asyncio.sleep(0.5)
+            
+        for bot in bot_clients:
+            try:
+                bot_me = await bot.get_me()
+                await smart_add_user(clone, chat_id, bot_me.id, is_bot=True)
+                await asyncio.sleep(0.8)
+            except: continue
+                
+        await temp_reply(event, f"✅ Đã tạo nhóm cho {username} thành công!\n🆔 ID: `{chat_id}`")
+        
+    except Exception as e: 
+        await temp_reply(event, f"❌ Lỗi: {str(e)}")
 
 @events.register(events.NewMessage(pattern=r'^/join\s+(.+)$'))
 async def join_cmd(event):
