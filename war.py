@@ -562,6 +562,61 @@ async def tao_cmd(event):
         
     except Exception as e: 
         await temp_reply(event, f"❌ Lỗi: {str(e)}")
+@events.register(events.NewMessage(pattern=r'^/tao2\s+(@\w+)$'))
+async def tao2_cmd(event):
+    if not is_admin(event.sender_id): return
+    await delete_cmd_msg(event)
+    
+    username = event.pattern_match.group(1).strip()
+    if not clone_clients: 
+        await temp_reply(event, "❌ Cần ít nhất 1 clone để tạo nhóm")
+        return
+    
+    clone = clone_clients[0]
+    try:
+        # Bước 1: Tìm kiếm User qua Username để lấy Entity và access_hash
+        user_entity = await resolve_user_by_username(clone, username)
+        
+        if not user_entity:
+            await temp_reply(event, f"❌ Không tìm thấy người dùng {username}")
+            return
+
+        title = f"Group_War_{random.randint(1000,9999)}"
+        
+        # Bước 2: Tạo nhóm với User đã tìm thấy
+        result = await clone(CreateChatRequest(title=title, users=[user_entity]))
+        
+        # Lấy chat_id từ kết quả trả về
+        chat_id = None
+        if hasattr(result, 'chats') and result.chats:
+            chat_id = result.chats[0].id
+        elif hasattr(result, 'updates'):
+            for u in result.updates:
+                if hasattr(u, 'chats') and u.chats:
+                    chat_id = u.chats[0].id
+                    break
+        
+        if not chat_id:
+            await temp_reply(event, "❌ Tạo nhóm lỗi: Không lấy được ID")
+            return
+
+        # Bước 3: Tự động kéo Admin và Bot vào nhóm
+        for admin_id in ADMIN_IDS:
+            await smart_add_user(clone, chat_id, admin_id)
+            await asyncio.sleep(0.5)
+            
+        for bot in bot_clients:
+            try:
+                bot_me = await bot.get_me()
+                await smart_add_user(clone, chat_id, bot_me.id, is_bot=True)
+                await asyncio.sleep(0.8)
+            except: continue
+                
+        await temp_reply(event, f"✅ Đã tạo nhóm cho {username} thành công!\n🆔 ID: `{chat_id}`")
+        
+    except Exception as e: 
+        await temp_reply(event, f"❌ Lỗi hệ thống: {str(e)}")
+
 
 @events.register(events.NewMessage(pattern=r'^/join\s+(.+)$'))
 async def join_cmd(event):
@@ -736,7 +791,7 @@ async def main():
                       cam_cmd, cut_cmd, uncam_cmd, uncut_cmd, join_cmd,
                       addbot_cmd, lbot_cmd, voice_cmd, cpuram_cmd, noi_cmd, tao_cmd,
                       addadmin_cmd, boadmin_cmd, addclone_cmd, lclone_cmd, locclone_cmd,
-                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, help_cmd]:
+                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, help_cmd,tao2]:
                 bot.add_event_handler(h)
         except Exception as e: print(f"❌ BOT LỖI: {e}")
 
@@ -752,7 +807,7 @@ async def main():
                       cam_cmd, cut_cmd, uncam_cmd, uncut_cmd, join_cmd,
                       addbot_cmd, lbot_cmd, voice_cmd, cpuram_cmd, noi_cmd, tao_cmd,
                       addadmin_cmd, boadmin_cmd, addclone_cmd, lclone_cmd, locclone_cmd,
-                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, auto_delete_handler, help_cmd]:
+                      sp1, sp2, sp3, sp4, sp5, sp6, sp7, auto_delete_handler, help_cmd,tao2]:
                 clone.add_event_handler(h)
         except Exception as e: print(f"❌ CLONE LỖI: {e}")
 
