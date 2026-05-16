@@ -163,45 +163,57 @@ async def resolve_user_by_username(client, username):
             return InputUser(user_id=entity.user_id, access_hash=entity.access_hash)
     except: return None
 
+# Đảm bảo bạn đã import các Class này ở đầu file hoặc ngay trong hàm
+from telethon.tl.types import Channel, Chat, InputPeerChannel, InputPeerChat
+
 async def smart_add_user(clone, chat_id, user_id, is_bot=False):
-    """Thêm user vào chat, tự động chọn API phù hợp và xử lý bot."""
-    chat = await clone.get_entity(chat_id)
-    is_channel = getattr(chat, 'megagroup', False) or getattr(chat, 'broadcast', False)
-
-    input_user = None
-    if is_bot:
-        # Thử lấy username của bot từ danh sách bot_clients để resolve
-        username = None
-        for b in bot_clients:
-            try:
-                me = await b.get_me()
-                if me.id == user_id:
-                    username = me.username
-                    break
-            except: pass
-        if username:
-            input_user = await resolve_user_by_username(clone, username)
-        if input_user is None:
-            input_user = await get_input_user(clone, user_id)
-    else:
-        input_user = await get_input_user(clone, user_id)
-
-    if input_user is None:
-        return False
-
+    """Thêm user vào chat, tự động nhận diện chính xác loại nhóm (Chat/Channel/Megagroup)."""
     try:
-        if is_channel:
-            await clone(InviteToChannelRequest(channel=chat_id, users=[input_user]))
+        # 1. Lấy thực thể Chat/Channel
+        chat = await clone.get_entity(chat_id)
+        
+        # 2. Xử lý lấy InputUser
+        input_user = None
+        if is_bot:
+            for b in bot_clients:
+                try:
+                    bot_me = await b.get_me()
+                    if bot_me.id == user_id:
+                        input_user = await clone.get_input_entity(bot_me.username)
+                        break
+                except: pass
+        
+        if not input_user:
+            input_user = await get_input_user(clone, user_id)
+
+        if not input_user:
+            return False
+
+        # 3. KIỂM TRA LOẠI NHÓM ĐỂ DÙNG API PHÙ HỢP
+        # Trong Telethon, Supergroup được coi là một loại Channel
+        if isinstance(chat, Channel):
+            # Dùng cho Supergroup (Megagroup) và Broadcast Channel
+            await clone(InviteToChannelRequest(channel=chat, users=[input_user]))
         else:
-            await clone(AddChatUserRequest(chat_id=chat_id, user_id=input_user, fwd_limit=0))
+            # Dùng cho Nhóm thường (Small Chat)
+            await clone(AddChatUserRequest(chat_id=chat.id, user_id=input_user, fwd_limit=0))
+        
         return True
+
     except UserAlreadyParticipantError:
         return True
     except FloodWaitError as fw:
+        print(f"⚠️ Chờ {fw.seconds}s do FloodWait...")
         await asyncio.sleep(fw.seconds)
         return False
     except Exception as e:
-        print(f"Lỗi thêm user {user_id}: {e}")
+        # Nếu lỗi do sai loại object, thử ép dùng InviteToChannelRequest một lần nữa
+        if "InviteToChannelRequest" in str(e) or "AddChatUserRequest" in str(e):
+            try:
+                await clone(InviteToChannelRequest(channel=chat_id, users=[input_user]))
+                return True
+            except: pass
+        print(f"❌ Lỗi thêm user {user_id}: {e}")
         return False
 
 # ========== SPAM LOOP (dùng asyncio.Event) ==========
