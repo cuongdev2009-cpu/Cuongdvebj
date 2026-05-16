@@ -140,14 +140,19 @@ def mention_by_id(uid, text):
     return f"[{text}](tg://user?id={uid})"
 
 async def get_input_user(client, user_id):
-    """Lấy InputUser, cố gắng resolve để có access_hash."""
     try:
+        # Ép client phải tìm entity từ database của Telegram
         entity = await client.get_input_entity(user_id)
-        if isinstance(entity, InputUser): return entity
-        if hasattr(entity, 'user_id') and hasattr(entity, 'access_hash'):
-            return InputUser(user_id=entity.user_id, access_hash=entity.access_hash)
-    except: pass
-    return InputUser(user_id=user_id, access_hash=0)
+        return entity
+    except ValueError:
+        try:
+            # Nếu không thấy, thử lấy thông tin chi tiết (chỉ hoạt động nếu ID đã từng xuất hiện)
+            entity = await client.get_entity(user_id)
+            return await client.get_input_entity(entity)
+        except Exception:
+            return None
+    except Exception:
+        return None
 
 async def resolve_user_by_username(client, username):
     """Thử lấy InputUser qua @username."""
