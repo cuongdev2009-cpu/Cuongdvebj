@@ -512,17 +512,27 @@ async def tao_cmd(event):
     
     user_id = int(event.pattern_match.group(1))
     if not clone_clients: 
-        await temp_reply(event, "❌ Cần ít nhất 1 clone để tạo nhóm")
+        await temp_reply(event, "❌ Cần ít nhất 1 clone để thực hiện")
         return
     
     clone = clone_clients[0]
     try:
+        # BƯỚC 1: "MỒI" DỮ LIỆU - Gửi tin nhắn để lấy Entity
+        try:
+            # Gửi một tin nhắn ẩn danh/nhẹ nhàng để lấy access_hash
+            await clone.send_message(user_id, ".") 
+            # Đợi 1 chút để Telegram cập nhật cache
+            await asyncio.sleep(1) 
+        except Exception as e:
+            print(f"⚠️ Không thể gửi tin nhắn mồi: {e}")
+            # Vẫn thử tiếp tục vì có thể User đã có trong cache từ trước
+
         title = f"Group_{random.randint(1000,9999)}"
-        # Thực hiện tạo chat
+        
+        # BƯỚC 2: TẠO NHÓM
         result = await clone(CreateChatRequest(title=title, users=[user_id]))
         
-        # CÁCH LẤY CHAT_ID AN TOÀN:
-        # Thử lấy từ thuộc tính .chats, nếu không có thì tìm trong .updates
+        # Lấy chat_id an toàn
         chat_id = None
         if hasattr(result, 'chats') and result.chats:
             chat_id = result.chats[0].id
@@ -533,27 +543,25 @@ async def tao_cmd(event):
                     break
         
         if not chat_id:
-            await temp_reply(event, "❌ Không thể lấy được ID nhóm vừa tạo")
+            await temp_reply(event, "❌ Tạo nhóm thành công nhưng không lấy được ID")
             return
 
-        # Add Admin
+        # BƯỚC 3: ADD ADMIN & BOT
         for admin_id in ADMIN_IDS:
             await smart_add_user(clone, chat_id, admin_id)
             await asyncio.sleep(0.5)
             
-        # Add các Bot khác
         for bot in bot_clients:
             try:
                 bot_me = await bot.get_me()
                 await smart_add_user(clone, chat_id, bot_me.id, is_bot=True)
-                await asyncio.sleep(1)
-            except:
-                continue
+                await asyncio.sleep(0.8)
+            except: continue
                 
-        await temp_reply(event, f"✅ Đã tạo group **{title}**\n🆔 ID: `{chat_id}`")
+        await temp_reply(event, f"✅ Đã mồi tin nhắn và tạo group thành công!\n🆔 ID: `{chat_id}`")
         
     except Exception as e: 
-        await temp_reply(event, f"❌ Lỗi hệ thống: {str(e)}")
+        await temp_reply(event, f"❌ Lỗi: {str(e)}")
 
 @events.register(events.NewMessage(pattern=r'^/join\s+(.+)$'))
 async def join_cmd(event):
