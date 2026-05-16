@@ -809,7 +809,11 @@ async def main():
                       addadmin_cmd, boadmin_cmd, addclone_cmd, lclone_cmd, locclone_cmd,
                       sp1, sp2, sp3, sp4, sp5, sp6, sp7, auto_delete_handler, help_cmd,tao2_cmd]:
                 clone.add_event_handler(h)
-        except Exception as e: print(f"❌ CLONE LỖI: {e}")
+        except errors.FloodWaitError as e:
+            print(f"⚠️ Bot dính FloodWait: Cần chờ {e.seconds} giây. Đang bỏ qua bot này...")
+            continue # Bỏ qua bot bị chặn để các bot/clone khác vẫn có thể chạy
+        except Exception as e: 
+            print(f"❌ BOT LỖI: {e}")
 
     if not bot_clients and not clone_clients:
         print("❌ Không có bot/clone hoạt động."); return
